@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Electron build outputs (large files, do not commit)
+release/
+release/**

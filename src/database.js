@@ -7,7 +7,11 @@ class MaterialDB {
   static async init() {
     if (this.initialized && this.db) return
 
+    // Electron/打包环境优先使用本地 wasm 资源，其次回退到 CDN
     const baseUrls = [
+      // 打包后相对路径：dist/index.html -> dist/assets/sql-wasm.wasm（或 public/sql-wasm.wasm）
+      './',
+      '/sqljs/',
       'https://sql.js.org/dist/',
       'https://cdn.jsdelivr.net/npm/sql.js@1.10.2/dist/',
       'https://unpkg.com/sql.js@1.10.2/dist/'
