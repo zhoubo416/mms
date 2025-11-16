@@ -10,6 +10,7 @@ const dialogVisible = ref(false)
 const editMode = ref(false)
 const currentMaterial = ref({
   id: null,
+  material_code: '',
   name: '',
   specification: '',
   unit: '',
@@ -31,7 +32,8 @@ const filteredMaterials = computed(() => {
   if (searchText.value) {
     result = result.filter(item => 
       item.name.toLowerCase().includes(searchText.value.toLowerCase()) ||
-      (item.specification && item.specification.toLowerCase().includes(searchText.value.toLowerCase()))
+      (item.specification && item.specification.toLowerCase().includes(searchText.value.toLowerCase())) ||
+      (item.material_code && item.material_code.toLowerCase().includes(searchText.value.toLowerCase()))
     )
   }
   
@@ -61,6 +63,7 @@ const openDialog = (material = null) => {
     editMode.value = false
     currentMaterial.value = {
       id: null,
+      material_code: '',
       name: '',
       specification: '',
       unit: '',
@@ -162,7 +165,7 @@ onMounted(() => {
       <div class="search-bar">
         <el-input
           v-model="searchText"
-          placeholder="搜索物资名称或型号"
+          placeholder="搜索物资编码、名称或型号"
           style="width: 300px"
           clearable
         >
@@ -195,6 +198,7 @@ onMounted(() => {
     <!-- 物资列表 -->
     <el-card>
       <el-table :data="filteredMaterials" style="width: 100%" stripe>
+        <el-table-column prop="material_code" label="物资编码" width="120" />
         <el-table-column prop="name" label="物资名称" min-width="150" />
         <el-table-column prop="specification" label="型号" width="120" />
         <el-table-column prop="category" label="分类" width="100" />
@@ -247,13 +251,28 @@ onMounted(() => {
       <el-form :model="currentMaterial" label-width="100px">
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="物资编码">
+              <el-input v-model="currentMaterial.material_code" placeholder="请输入物资编码（可选）" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="物资名称" required>
               <el-input v-model="currentMaterial.name" placeholder="请输入物资名称" />
             </el-form-item>
           </el-col>
+        </el-row>
+        
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="型号">
               <el-input v-model="currentMaterial.specification" placeholder="请输入型号" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="分类" required>
+              <el-select v-model="currentMaterial.category" placeholder="选择分类" style="width: 100%">
+                <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
+              </el-select>
             </el-form-item>
           </el-col>
         </el-row>
@@ -271,10 +290,8 @@ onMounted(() => {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="分类" required>
-              <el-select v-model="currentMaterial.category" placeholder="选择分类" style="width: 100%">
-                <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
-              </el-select>
+            <el-form-item label="当前库存">
+              <el-input-number v-model="currentMaterial.current_stock" :min="0" :step="1" controls-position="right" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -299,9 +316,19 @@ onMounted(() => {
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="当前库存">
-              <el-input-number v-model="currentMaterial.current_stock" :min="0" :step="1" controls-position="right" style="width: 100%" />
+            <el-form-item label="存放位置">
+              <el-input v-model="currentMaterial.location" placeholder="请输入存放位置（可选）" />
             </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="供应商">
+              <el-input v-model="currentMaterial.supplier" placeholder="请输入供应商（可选）" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
           </el-col>
         </el-row>
 

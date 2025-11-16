@@ -32,6 +32,8 @@ class MaterialDB {
             const parsed = JSON.parse(savedData)
             const data = new Uint8Array(parsed)
             this.db = new SQL.Database(data)
+            // 对现有数据库执行迁移
+            this.migrateDatabase()
           } catch (e) {
             console.warn('本地数据库恢复失败，已重置为空数据库:', e)
             localStorage.removeItem('materialsDB')
@@ -64,6 +66,7 @@ class MaterialDB {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS materials (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        material_code TEXT,
         name TEXT NOT NULL,
         category TEXT NOT NULL,
         specification TEXT,
@@ -79,6 +82,9 @@ class MaterialDB {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `)
+
+    // 检查并添加 material_code 字段（用于数据库迁移）
+    this.migrateDatabase()
 
     // 创建入库记录表
     this.db.exec(`
@@ -189,11 +195,11 @@ class MaterialDB {
 
   static addMaterial(material) {
     const sql = `
-      INSERT INTO materials (name, category, specification, unit, current_stock, min_stock, max_stock, unit_price, location, supplier, remark)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO materials (material_code, name, category, specification, unit, current_stock, min_stock, max_stock, unit_price, location, supplier, remark)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `
     this.executeUpdate(sql, [
-      material.name, material.category, material.specification || '', material.unit,
+      material.material_code || '', material.name, material.category, material.specification || '', material.unit,
       material.current_stock || 0, material.min_stock || 0, material.max_stock || 0,
       material.unit_price || 0, material.location || '', material.supplier || '', material.remark || ''
     ])
@@ -203,11 +209,11 @@ class MaterialDB {
   static updateMaterial(id, material) {
     const sql = `
       UPDATE materials 
-      SET name = ?, category = ?, specification = ?, unit = ?, min_stock = ?, max_stock = ?, unit_price = ?, location = ?, supplier = ?, remark = ?, updated_at = CURRENT_TIMESTAMP
+      SET material_code = ?, name = ?, category = ?, specification = ?, unit = ?, min_stock = ?, max_stock = ?, unit_price = ?, location = ?, supplier = ?, remark = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `
     return this.executeUpdate(sql, [
-      material.name, material.category, material.specification || '', material.unit,
+      material.material_code || '', material.name, material.category, material.specification || '', material.unit,
       material.min_stock, material.max_stock, material.unit_price, 
       material.location || '', material.supplier || '', material.remark || '', id
     ])
@@ -325,6 +331,121 @@ class MaterialDB {
       totalMaterials,
       lowStockCount,
       totalValue
+    }
+  }
+
+  // 根据物资编码查找物资
+  static getMaterialByCode(code) {
+    const result = this.executeQuery('SELECT * FROM materials WHERE material_code = ?', [code])
+    return result.length > 0 ? result[0] : null
+  }
+
+  // 根据编码或名称搜索物资
+  static searchMaterials(keyword) {
+    const sql = `
+      SELECT * FROM materials 
+      WHERE material_code LIKE ? OR name LIKE ?
+      ORDER BY name
+      LIMIT 20
+    `
+    const searchTerm = `%${keyword}%`
+    return this.executeQuery(sql, [searchTerm, searchTerm])
+  }
+
+  // 数据库迁移方法
+  static migrateDatabase() {
+    try {
+      // 检查表结构
+      const tableInfo = this.executeQuery("PRAGMA table_info(materials)")
+      console.log('当前表结构:', tableInfo)
+      
+      const hasCodeField = tableInfo.some(column => column.name === 'material_code')
+      const hasLocationField = tableInfo.some(column => column.name === 'location')
+      const hasSupplierField = tableInfo.some(column => column.name === 'supplier')
+      
+      // 如果缺少关键字段，重建表
+      if (!hasCodeField || !hasLocationField || !hasSupplierField) {
+        console.log('检测到表结构不完整，开始重建表...')
+        this.rebuildMaterialsTable()
+      } else {
+        console.log('表结构完整，无需迁移')
+      }
+    } catch (error) {
+      console.warn('数据库迁移失败，尝试重建表:', error)
+      this.rebuildMaterialsTable()
+    }
+  }
+
+  // 重建物资表
+  static rebuildMaterialsTable() {
+    try {
+      // 备份现有数据
+      let existingData = []
+      try {
+        existingData = this.executeQuery('SELECT * FROM materials')
+        console.log('备份了', existingData.length, '条现有数据')
+      } catch (e) {
+        console.log('无现有数据需要备份')
+      }
+
+      // 删除旧表
+      this.db.exec('DROP TABLE IF EXISTS materials')
+      
+      // 创建新表
+      this.db.exec(`
+        CREATE TABLE materials (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          material_code TEXT,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          specification TEXT,
+          unit TEXT NOT NULL,
+          current_stock INTEGER DEFAULT 0,
+          min_stock INTEGER DEFAULT 0,
+          max_stock INTEGER DEFAULT 0,
+          unit_price REAL DEFAULT 0,
+          location TEXT,
+          supplier TEXT,
+          remark TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+
+      // 恢复数据
+      if (existingData.length > 0) {
+        console.log('开始恢复数据...')
+        for (const item of existingData) {
+          const sql = `
+            INSERT INTO materials (
+              name, category, specification, unit, current_stock, min_stock, max_stock, 
+              unit_price, location, supplier, remark, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `
+          this.executeUpdate(sql, [
+            item.name,
+            item.category,
+            item.specification || '',
+            item.unit,
+            item.current_stock || 0,
+            item.min_stock || 0,
+            item.max_stock || 0,
+            item.unit_price || 0,
+            item.location || '',
+            item.supplier || '',
+            item.remark || '',
+            item.created_at,
+            item.updated_at
+          ])
+        }
+        console.log('数据恢复完成')
+      }
+
+      this.saveDatabase()
+      console.log('表重建完成')
+    } catch (error) {
+      console.error('重建表失败:', error)
+      throw error
     }
   }
 
