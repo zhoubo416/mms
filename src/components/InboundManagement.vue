@@ -65,7 +65,19 @@ const loadMaterials = async () => {
 const loadInboundRecords = async () => {
   try {
     await MaterialDB.init()
-    inboundRecords.value = MaterialDB.getInboundRecords()
+    const records = MaterialDB.getInboundRecords()
+    const materialsMap = {}
+    
+    // 创建物资映射表
+    materials.value.forEach(material => {
+      materialsMap[material.id] = material
+    })
+    
+    // 为每条入库记录添加物资编码
+    inboundRecords.value = records.map(record => ({
+      ...record,
+      material_code: materialsMap[record.material_id]?.material_code || ''
+    }))
   } catch (error) {
     console.error('加载入库记录失败:', error)
     ElMessage.error('加载入库记录失败: ' + error.message)
@@ -509,6 +521,7 @@ onMounted(() => {
       </template>
       
       <el-table :data="filteredRecords" style="width: 100%" stripe>
+        <el-table-column prop="material_code" label="物资编码" width="120" show-overflow-tooltip />
         <el-table-column prop="material_name" label="物资名称" min-width="150" />
         <el-table-column prop="quantity" label="入库数量" width="100">
           <template #default="{ row }">

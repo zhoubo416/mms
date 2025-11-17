@@ -72,7 +72,20 @@ watch(() => currentRecord.value.material_id, (newId) => {
 const loadOutboundRecords = async () => {
   try {
     await MaterialDB.init()
-    outboundRecords.value = MaterialDB.getOutboundRecords(200)
+    const records = MaterialDB.getOutboundRecords(200)
+    const materialsMap = {}
+    
+    // 创建物资映射表
+    materials.value.forEach(material => {
+      materialsMap[material.id] = material
+    })
+    
+    // 为每条出库记录添加物资编码
+    outboundRecords.value = records.map(record => ({
+      ...record,
+      material_code: materialsMap[record.material_id]?.material_code || ''
+    }))
+    
     emit('refresh')
   } catch (error) {
     console.error('加载出库记录失败:', error)
@@ -534,6 +547,7 @@ onMounted(() => {
       </template>
       
       <el-table :data="filteredRecords" style="width: 100%" stripe>
+        <el-table-column prop="material_code" label="物资编码" width="120" show-overflow-tooltip />
         <el-table-column prop="material_name" label="物资名称" min-width="150" />
         <el-table-column prop="quantity" label="出库数量" width="100">
           <template #default="{ row }">
